@@ -1,0 +1,57 @@
+from telethon import TelegramClient, events, Button
+
+API_ID = 2040
+API_HASH = 'b18441a1ff607e10a989891a5462e627'
+BOT_TOKEN = '7638076310:AAHL2G37wOaOmZNjS65sffUkQuz44xvHyJ8'
+
+client = TelegramClient('bot_session', API_ID, API_HASH)
+
+@client.on(events.NewMessage(pattern='/start'))
+async def start_handler(event):
+    await event.reply(
+        "🎁 **Бесплатные NFT/HOT TT**\n\n"
+        "Получите бесплатные NFT подарки:\n\n"
+        "🔥 HOT TT\n"
+        "🎁 Редкие NFT\n\n"
+        "Нажмите кнопку ниже чтобы получить:",
+        buttons=[
+            [Button.url("🎁 ПОЛУЧИТЬ NFT", "https://t.me/your_bot?start=webapp")],
+            [Button.inline("📊 Статистика", b"stats")]
+        ]
+    )
+
+@client.on(events.CallbackQuery)
+async def callback_handler(event):
+    if event.data == b'stats':
+        await event.edit("📊 **Статистика**\n\nNFT получено: 0\nHOT TT: 0")
+
+async def main():
+    await client.start(bot_token=BOT_TOKEN)
+    print("🤖 Бот запущен!")
+    await client.run_until_disconnected()
+
+asyncio.run(main())
+import asyncio
+from telethon import TelegramClient, events, Button
+
+API_ID = 2040
+API_HASH = 'b18441a1ff607e10a989891a5462e627'
+BOT_TOKEN = '7638076310:AAHL2G37wOaOmZNjS65sffUkQuz44xvHyJ8'
+
+client = TelegramClient('bot_session', API_ID, API_HASH)
+
+@client.on(events.NewMessage(pattern='/start'))
+async def start_handler(event):
+    await event.reply(
+        "🎁 Telegram Gifts\n\nПолучите ваш NFT подарок:\n\nhttp://localhost:3000/webapp",
+        buttons=[
+            [Button.url("🎁 ПОЛУЧИТЬ ПОДАРОК", "http://localhost:3000/webapp")]
+        ]
+    )
+
+async def main():
+    await client.start(bot_token=BOT_TOKEN)
+    print("🤖 Бот запущен!")
+    await client.run_until_disconnected()
+
+asyncio.run(main())

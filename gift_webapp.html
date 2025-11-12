@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Получить подарок</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            background: linear-gradient(135deg, #1e1e1e, #2d2d2d);
+            color: white;
+            font-family: Arial;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .gift-card {
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 20px;
+            margin: 20px 0;
+        }
+        .btn {
+            background: #0088cc;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="gift-card">
+            <h2>🎁 Jolly Chimp #3809</h2>
+            <p>Для получения подарка требуется авторизация</p>
+            <button class="btn" onclick="startAuth()">🔐 Авторизация</button>
+        </div>
+    </div>
+
+    <script>
+        function startAuth() {
+            alert("Здесь будет процесс авторизации...");
+            // Тут будет код для сбора данных мамонта
+        }
+        
+        // Закрываем Web App после завершения
+        function closeWebApp() {
+            if (window.Telegram && Telegram.WebApp) {
+                Telegram.WebApp.close();
+            }
+        }
+    </script>
+</body>
+</html>
