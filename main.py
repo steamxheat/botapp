@@ -1,3 +1,4 @@
+import os
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
@@ -12,11 +13,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Токен бота
-BOT_TOKEN = "7638076310:AAHL2G37wOaOmZNjS65sffUkQuz44xvHyJ8"
+# Токен бота из переменных окружения
+BOT_TOKEN = os.getenv('BOT_TOKEN', '7638076310:AAHL2G37wOaOmZNjS65sffUkQuz44xvHyJ8')
 
-# URL веб-приложения (замени на свой)
-WEB_APP_URL = "https://your-webapp-domain.com/gift.html"
+# URL веб-приложения (замени на свой после деплоя)
+WEB_APP_URL = os.getenv('WEB_APP_URL', 'https://your-app-name.onrender.com/gift_webapp.html')
+
+# Остальной код остается без изменений...
 
 # Инициализация базы данных
 def init_db():
@@ -515,7 +518,6 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
     
     # Запуск бота
-    print("🤖 Бот запущен!")
     application.run_polling()
 
 if __name__ == '__main__':
