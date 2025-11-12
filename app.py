@@ -542,8 +542,8 @@ def setup_bot():
         logger.error(f"❌ Bot setup failed: {e}")
         return None
 
-async def run_bot_polling():
-    """Запуск бота с опросом"""
+async def run_bot():
+    """Запуск бота"""
     try:
         application = setup_bot()
         if application:
@@ -552,32 +552,27 @@ async def run_bot_polling():
         else:
             logger.error("❌ Failed to setup bot")
     except Exception as e:
-        logger.error(f"❌ Bot polling error: {e}")
+        logger.error(f"❌ Bot error: {e}")
 
-def run_bot():
-    """Запуск бота в отдельном потоке"""
-    try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(run_bot_polling())
-    except Exception as e:
-        logger.error(f"❌ Bot thread error: {e}")
-
-# ========== START APPLICATION ==========
-
-def start_services():
-    """Запуск всех сервисов"""
-    logger.info("🚀 Starting services...")
-    
-    # Запускаем бота в отдельном потоке
-    bot_thread = threading.Thread(target=run_bot, daemon=True)
-    bot_thread.start()
-    logger.info("✅ Bot thread started")
-    
-    # Запускаем Flask сервер
+def run_flask():
+    """Запуск Flask сервера"""
     port = int(os.environ.get('PORT', 5000))
     logger.info(f"🌐 Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
+async def main():
+    """Основная функция - запускаем оба сервиса"""
+    logger.info("🚀 Starting both bot and web server...")
+    
+    # Запускаем бота в фоновом режиме
+    bot_task = asyncio.create_task(run_bot())
+    
+    # Запускаем Flask в отдельном потоке
+    flask_thread = threading.Thread(target=run_flask, daemon=True)
+    flask_thread.start()
+    
+    # Ждем завершения (никогда не завершится)
+    await bot_task
+
 if __name__ == '__main__':
-    start_services()
+    asyncio.run(main()) 
