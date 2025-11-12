@@ -6,8 +6,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 import sqlite3
 import datetime
 import re
-import asyncio
-import threading
+import multiprocessing
 import time
 
 # Настройка Flask
@@ -23,9 +22,6 @@ logger = logging.getLogger(__name__)
 # Конфигурация
 BOT_TOKEN = os.getenv('BOT_TOKEN', '7638076310:AAHL2G37wOaOmZNjS65sffUkQuz44xvHyJ8')
 WEB_APP_URL = os.getenv('RENDER_EXTERNAL_URL', '') + '/gift_webapp.html'
-
-# Глобальная переменная для бота
-bot_app = None
 
 # ========== FLASK ROUTES ==========
 
@@ -45,7 +41,7 @@ def handle_auth():
 
 @app.route('/health')
 def health():
-    return jsonify({"status": "ok", "bot_running": bot_app is not None})
+    return jsonify({"status": "ok"})
 
 # ========== TELEGRAM BOT FUNCTIONS ==========
 
@@ -519,36 +515,35 @@ async def gift_details_handler(query, context, data):
         parse_mode='Markdown'
     )
 
-# ========== BOT SETUP ==========
+# ========== BOT FUNCTIONS ==========
 
 def setup_bot():
-    global bot_app
     try:
         # Инициализация БД
         init_db()
         add_default_workers()
         
         # Создание приложения бота
-        bot_app = Application.builder().token(BOT_TOKEN).build()
+        application = Application.builder().token(BOT_TOKEN).build()
         
         # Обработчики
-        bot_app.add_handler(CommandHandler("start", start))
-        bot_app.add_handler(CallbackQueryHandler(button_handler))
-        bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CallbackQueryHandler(button_handler))
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, message_handler))
         
         logger.info("✅ Bot setup completed")
-        return bot_app
+        return application
     except Exception as e:
         logger.error(f"❌ Bot setup failed: {e}")
         return None
 
-async def run_bot():
-    """Запуск бота"""
+def run_bot():
+    """Запуск бота в отдельном процессе"""
     try:
         application = setup_bot()
         if application:
             logger.info("🤖 Starting bot polling...")
-            await application.run_polling()
+            application.run_polling()
         else:
             logger.error("❌ Failed to setup bot")
     except Exception as e:
@@ -560,19 +555,25 @@ def run_flask():
     logger.info(f"🌐 Starting Flask server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
-async def main():
-    """Основная функция - запускаем оба сервиса"""
+def start_services():
+    """Запуск всех сервисов"""
     logger.info("🚀 Starting both bot and web server...")
     
-    # Запускаем бота в фоновом режиме
-    bot_task = asyncio.create_task(run_bot())
+    # Инициализация БД в основном процессе
+    init_db()
+    add_default_workers()
     
-    # Запускаем Flask в отдельном потоке
-    flask_thread = threading.Thread(target=run_flask, daemon=True)
-    flask_thread.start()
+    # Запускаем бота в отдельном процессе
+    bot_process = multiprocessing.Process(target=run_bot)
+    bot_process.daemon = True
+    bot_process.start()
+    logger.info("✅ Bot process started")
     
-    # Ждем завершения (никогда не завершится)
-    await bot_task
+    # Даем боту время на запуск
+    time.sleep(5)
+    
+    # Запускаем Flask в основном процессе
+    run_flask()
 
 if __name__ == '__main__':
-    asyncio.run(main()) 
+    start_services()
